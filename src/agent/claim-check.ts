@@ -106,3 +106,30 @@ const OFFER =
 export function offersTime(reply: string): boolean {
   return OFFER.test(reply);
 }
+
+// Whether a refused phone number's follow-up mentions the country code, as
+// the tool result asks. In the eval the agent did in only about 3 of 5 runs,
+// and otherwise just asked for the number again.
+export function mentionsCountryCode(reply: string): boolean {
+  return /country code|outside the (us|u\.s\.)|\b(a )?(us|u\.s\.) number/i.test(reply);
+}
+
+// The clarifying question for vague messages. The prompt allows it only for
+// "is there anything scheduled?", but the model asked it after "anything
+// open tomorrow?", after a name and after a goodbye.
+const VAGUE_QUESTION = /appointment you already have,? or what times are open/i;
+// A caller's message that already says what they want: a day, a time, a
+// service, or a question about what's open.
+const NAMES_SOMETHING =
+  /\b(today|tomorrow|tonight|next week|mon|tues?|wed|thu|thur|thurs|fri|sat|sun)[a-z]*\b|\b\d{1,2}(:\d{2})?\s*(am|pm)\b|\b\d{1,2}(st|nd|rd|th)\b|\b(open|opening|available|free|wash|detail|coating|correction)\b/i;
+
+export function asksVagueQuestionNeedlessly(reply: string, callerMessage: string): boolean {
+  return VAGUE_QUESTION.test(reply) && NAMES_SOMETHING.test(callerMessage);
+}
+
+// A caller saying goodbye in so many words. Narrower than "sounds finished"
+// (no bare "thanks"), because the agent is made to hang up on it: "ok
+// thanks, 4:30 then" must not count.
+export function saysGoodbye(callerMessage: string): boolean {
+  return /\b(bye|goodbye|good bye|bye bye)\b/i.test(callerMessage);
+}

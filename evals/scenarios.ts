@@ -389,6 +389,37 @@ export const scenarios: Scenario[] = [
     check: (r) => [...expectNoNewBookings(r, 0), ...expectOneCall(r, { needsHuman: true, phone: MIKE })],
   },
   {
+    // From the bug hunt: the caller left mid-booking and was asked for details.
+    name: 'a goodbye mid-booking ends the call',
+    caller: ['book an exterior wash thursday at 10', 'thanks, bye'],
+    check(r) {
+      const problems = r.endedByAgent ? [] : ['the agent did not hang up after "thanks, bye"'];
+      if (events(r).length > 0) problems.push('booked without a name and number');
+      return problems;
+    },
+  },
+  {
+    // From the bug hunt: answered with the vague-message question.
+    name: '"anything open tomorrow?" is answered, not met with the vague-message question',
+    caller: ['do u guys have anything open tomorrow', "ok that's all, bye"],
+    check(r) {
+      const first = r.replies[0] ?? '';
+      return /appointment you already have/i.test(first) ? [`asked the vague-message question: "${first}"`] : [];
+    },
+  },
+  {
+    // From the bug hunt: "5/11" was read as Nov 11 without asking.
+    name: 'asks which month a date in numbers means',
+    caller: ['can i book an exterior wash for 5/11 at 3:30', 'November 5th', 'Dana, 415-555-0144', "That's all, bye."],
+    check(r) {
+      const first = r.replies[0] ?? '';
+      const problems = /month|november|may\b/i.test(first) ? [] : [`didn't ask which month: "${first}"`];
+      const booked = events(r)[0];
+      if (!booked?.start.equals(at('2026-11-05T15:30'))) problems.push('no booking on Thursday Nov 5 at 3:30');
+      return problems;
+    },
+  },
+  {
     // From the demo: given last year and a misspelt service, the agent
     // offered the taken 3:30 without checking it (3 of 5 runs).
     name: 'never offers a time it has not checked, given a past year and a misspelt service',

@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type OpenAI from 'openai';
-import { checkBookingClaim, claimsLateNote, offersTime, saysUnavailable } from '../../src/agent/claim-check.ts';
+import {
+  asksVagueQuestionNeedlessly,
+  checkBookingClaim,
+  claimsLateNote,
+  mentionsCountryCode,
+  offersTime,
+  saysGoodbye,
+  saysUnavailable,
+} from '../../src/agent/claim-check.ts';
 
 // A model that answers the verdict question with a fixed answer, or fails.
 function judge(answer: boolean | Error | string) {
@@ -125,4 +133,25 @@ test('a reply offering to book a time is recognised; opening hours are not', () 
   for (const reply of ["We're open 8 AM to 6 PM, Monday to Saturday.", 'What time would you like?']) {
     assert.equal(offersTime(reply), false, reply);
   }
+});
+
+test('the vague-message question counts as needless only when the message names something', () => {
+  const question = 'Do you mean an appointment you already have, or what times are open?';
+  for (const message of ['do u guys have anything open tomorrow', 'Thursday at 3pm?', 'how about an exterior wash']) {
+    assert.equal(asksVagueQuestionNeedlessly(question, message), true, message);
+  }
+  for (const message of ['Is there anything scheduled?', 'hi']) {
+    assert.equal(asksVagueQuestionNeedlessly(question, message), false, message);
+  }
+});
+
+test('a goodbye is a goodbye in so many words; thanks alone is not', () => {
+  assert.equal(saysGoodbye('thanks, bye'), true);
+  assert.equal(saysGoodbye('Goodbye!'), true);
+  assert.equal(saysGoodbye('ok thanks, 4:30 then'), false);
+});
+
+test('a reply mentioning the country code is recognised', () => {
+  assert.equal(mentionsCountryCode('Is that a US number? If not, say the country code.'), true);
+  assert.equal(mentionsCountryCode('That number seems invalid. Can you repeat it?'), false);
 });

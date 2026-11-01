@@ -463,6 +463,71 @@ test("once the running-late note is made, saying so later isn't questioned", asy
   assert.equal(requests.length, 3);
 });
 
+test('a caller who says goodbye mid-booking is let go, with a goodbye', async () => {
+  const { conversation: c, requests } = conversation([
+    // From the bug hunt: the caller left and the agent asked for details.
+    { content: 'I need your name and phone number to book that.' },
+  ]);
+  const turn = await c.send('thanks, bye');
+  assert.equal(turn.ended, true);
+  assert.equal(turn.reply, 'No problem, feel free to call back any time. Goodbye!');
+  assert.equal(requests.length, 1);
+});
+
+test("a goodbye after a booking change doesn't cut off its confirmation", async () => {
+  const book = {
+    name: 'book_appointment',
+    args: { serviceId: 'exterior-wash', date: '2026-11-05', time: '10:00', name: 'Sara', phone: '415-555-0190' },
+  };
+  const { conversation: c } = conversation([
+    { toolCalls: [book] },
+    { content: 'Booked you in for Thursday, Nov 5 at 10 AM. Anything else?' },
+  ]);
+  const turn = await c.send('Sara, 415-555-0190. Thursday 10 is fine, bye!');
+  assert.equal(turn.ended, false);
+  assert.equal(turn.reply, 'Booked you in for Thursday, Nov 5 at 10 AM. Anything else?');
+});
+
+test('"thanks" without a goodbye mid-booking is not treated as leaving', async () => {
+  const { conversation: c, requests } = conversation([{ content: 'Great, what name should I put it under?' }]);
+  const turn = await c.send('ok thanks, 4:30 then');
+  assert.equal(turn.ended, false);
+  assert.equal(requests.length, 1);
+});
+
+test('the vague-message question about a message that names a day is sent back', async () => {
+  const { conversation: c, requests } = conversation([
+    { content: 'Do you mean an appointment you already have, or what times are open?' },
+    { content: 'Which service would you like for tomorrow?' },
+  ]);
+  const turn = await c.send('do u guys have anything open tomorrow');
+  assert.equal(turn.reply, 'Which service would you like for tomorrow?');
+  assert.match(String(requests[1]?.messages.at(-1)?.content), /already names a day/);
+});
+
+test('the vague-message question is allowed for a vague message', async () => {
+  const { conversation: c, requests } = conversation([
+    { content: 'Do you mean an appointment you already have, or what times are open?' },
+  ]);
+  await c.send('Is there anything scheduled?');
+  assert.equal(requests.length, 1);
+});
+
+test('a refused number must be followed by the country code question', async () => {
+  const book = {
+    name: 'book_appointment',
+    args: { serviceId: 'exterior-wash', date: '2026-11-05', time: '10:00', name: 'Ravi', phone: '9811416685' },
+  };
+  const { conversation: c, requests } = conversation([
+    { toolCalls: [book] },
+    { content: 'That number seems invalid. Can you repeat it?' },
+    { content: 'Is that a US number? If not, please say the country code first, like plus nine one.' },
+  ]);
+  const turn = await c.send('Ravi, 9811416685');
+  assert.match(turn.reply, /country code/);
+  assert.match(String(requests[2]?.messages.at(-1)?.content), /didn't do what the tool result asked/);
+});
+
 test('an ordinary turn does not end the call', async () => {
   const { conversation: c } = conversation([{ content: 'We close at 6.' }]);
   assert.equal((await c.send('When do you close?')).ended, false);

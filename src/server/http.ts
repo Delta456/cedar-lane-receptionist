@@ -47,3 +47,15 @@ export function requireString(body: Record<string, unknown>, key: string): strin
 export function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
 }
+
+// Whether a request was made on this machine, not through a tunnel. A tunnel
+// (cloudflared, ngrok) connects from localhost too, but keeps the public
+// hostname in Host and adds forwarding headers, so those decide.
+export function isLocalRequest(req: IncomingMessage): boolean {
+  const host = (req.headers.host ?? '').replace(/:\d+$/, '').toLowerCase();
+  const local = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.localhost');
+  const forwarded = ['x-forwarded-for', 'x-forwarded-host', 'cf-connecting-ip', 'forwarded'].some(
+    (h) => h in req.headers,
+  );
+  return local && !forwarded;
+}

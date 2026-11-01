@@ -5,7 +5,7 @@
 //   POST /api/hangup { sessionId }          -> the same, sent when the tab closes
 import { readFile } from 'node:fs/promises';
 import type { Logger } from '../../lib/logger.ts';
-import { type Route, readJson, requireString, sendJson } from '../../server/http.ts';
+import { isLocalRequest, type Route, readJson, requireString, sendJson } from '../../server/http.ts';
 import type { CreateConversation, Sessions } from '../../server/sessions.ts';
 
 export type ChatRoutesDeps = {
@@ -17,6 +17,11 @@ export type ChatRoutesDeps = {
 
 export function createChatRoutes({ sessions, createConversation, pagePath, logger }: ChatRoutesDeps): Route {
   return async (req, res, path) => {
+    // The chat has no login, and a tunnel opened for Vapi would otherwise put
+    // it on the internet. Through a tunnel these routes don't exist.
+    if (!isLocalRequest(req)) {
+      return false;
+    }
     if (req.method === 'GET' && path === '/') {
       const html = await readFile(pagePath);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(html);

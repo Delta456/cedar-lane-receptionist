@@ -14,10 +14,18 @@ import { createLogger, type Logger } from '../lib/logger.ts';
 import { SerialQueue } from '../lib/serial-queue.ts';
 import type { CallLog } from '../services/call-log-service.ts';
 import { type CallSummary, summarizeCall } from './call-summary.ts';
-import { checkBookingClaim, claimsLateNote, offersTime, saysUnavailable } from './claim-check.ts';
+import {
+  asksVagueQuestionNeedlessly,
+  checkBookingClaim,
+  claimsLateNote,
+  mentionsCountryCode,
+  offersTime,
+  saysGoodbye,
+  saysUnavailable,
+} from './claim-check.ts';
 import { buildSystemPrompt, type Channel } from './prompt.ts';
 import { createTextToolCallDetector } from './text-tool-calls.ts';
-import { type CallState, findTool, newCallState, type Services, type Tool, tools } from './tools.ts';
+import { type CallState, findTool, newCallState, type Services, soundsFinished, type Tool, tools } from './tools.ts';
 
 type Message = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 
@@ -75,6 +83,13 @@ const UNTOLD_UNAVAILABLE = "[Check: your reply didn't tell the caller that the t
 // Sent when a reply offers a time that no tool has checked in this call.
 const UNCHECKED_TIME =
   '[Check: you offered the caller a time that no tool has checked. Never say a time can be booked until check_availability says so. Call check_availability now with the service, date and time, then tell the caller what it says.]';
+// Said when a caller leaves mid-call and the model's reply doesn't say goodbye.
+const CALL_BACK_GOODBYE = 'No problem, feel free to call back any time. Goodbye!';
+const SOUNDS_LIKE_GOODBYE = /\b(bye|goodbye|take care|have a (good|great|nice))\b/i;
+// Sent when the agent asked the vague-message question about a message that
+// already says what the caller wants.
+const NEEDLESS_QUESTION =
+  "[Check: don't ask whether they mean an existing appointment or open times: their message already names a day, a time, a service or what's open. Act on it with a tool, or ask only for what's missing.]";
 const UNBACKED_CLAIM =
   "[Check: you just told the caller a booking was made, moved or cancelled, but no booking tool succeeded in this turn. If the caller confirmed the change, call the tool now. If not, don't claim it; ask them to confirm.";
 
@@ -255,6 +270,7 @@ export class Conversation {
     let lateCorrected = false;
     let unavailableCorrected = false;
     let uncheckedCorrected = false;
+    let replyCorrected = false;
 
     for (let step = 0; step < MAX_STEPS; step++) {
       const message = await this.complete();
@@ -317,6 +333,23 @@ export class Conversation {
           this.messages.push({ role: 'user', content: UNCHECKED_TIME });
           continue;
         }
+        // The rest are about how the agent answers, not what it claims. At
+        // most one of them per turn, so a stubborn model can't loop.
+        const correction = replyCorrected ? null : this.replyCorrection(text, userText, toolCalls);
+        if (correction) {
+          replyCorrected = true;
+          this.log.warn('reply_corrected', { why: correction.why });
+          this.messages.push({ role: 'user', content: correction.note });
+          continue;
+        }
+        // A caller who says goodbye has left, whatever the model makes of
+        // it: mid-booking, it asked for their name and number instead, and
+        // told to hang up, still didn't. Not after a booking change this
+        // turn, so its confirmation is heard (runTurn won't end the call).
+        if (saysGoodbye(userText) && soundsFinished(userText) && !this.call.changedThisTurn) {
+          this.call.endRequested = true;
+          return this.reply(SOUNDS_LIKE_GOODBYE.test(text) ? text : CALL_BACK_GOODBYE, toolCalls);
+        }
         return this.reply(text, toolCalls);
       }
 
@@ -368,6 +401,22 @@ export class Conversation {
       this.log.warn('unbacked_booking_claim', { via: check.via });
     }
     return check.claimsChange;
+  }
+
+  // A note asking the model to answer again, if its reply ignores something
+  // it was told or said: a refused number without the country code question
+  // (asked in only about 3 of 5 runs), or the vague-message question about a
+  // message that wasn't vague.
+  private replyCorrection(text: string, userText: string, toolCalls: ToolCall[]): { why: string; note: string } | null {
+    const refused = toolCalls.findLast((c) => (c.result as { reason?: unknown } | null)?.reason === 'invalid_phone');
+    const help = (refused?.result as { tellCaller?: unknown } | undefined)?.tellCaller;
+    if (typeof help === 'string' && !mentionsCountryCode(text)) {
+      return { why: 'country_code', note: `[Check: your reply didn't do what the tool result asked. ${help}]` };
+    }
+    if (asksVagueQuestionNeedlessly(text, userText)) {
+      return { why: 'vague_question', note: NEEDLESS_QUESTION };
+    }
+    return null;
   }
 
   // A reply as the caller should get it: spoken times and dates, not the

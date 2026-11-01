@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { request } from 'node:http';
 import { afterEach, beforeEach, test } from 'node:test';
 import type { Turn } from '../../../src/agent/conversation.ts';
 import { eventually, startTestServer, type TestServer } from '../../support/test-server.ts';
@@ -56,4 +57,23 @@ test('when the agent hangs up, the call is logged and the session forgotten', as
 
   await server.post('/api/chat', { sessionId: 'a', message: 'new call' });
   assert.equal(server.created.length, 2);
+});
+
+// A request as a tunnel delivers it: from localhost, but with the public
+// hostname and forwarding headers.
+function viaTunnel(path: string, headers: Record<string, string>): Promise<number> {
+  const { port } = new URL(server.base);
+  return new Promise((resolve, reject) => {
+    const req = request({ host: '127.0.0.1', port, path, method: 'GET', headers }, (res) => {
+      res.resume();
+      resolve(res.statusCode ?? 0);
+    });
+    req.on('error', reject).end();
+  });
+}
+
+test('through a tunnel the chat does not exist', async () => {
+  assert.equal(await viaTunnel('/', { host: 'abc.trycloudflare.com' }), 404);
+  assert.equal(await viaTunnel('/', { host: 'localhost', 'cf-connecting-ip': '203.0.113.7' }), 404);
+  assert.equal(await viaTunnel('/', { host: 'localhost' }), 200);
 });
