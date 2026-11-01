@@ -4,9 +4,10 @@
 // and the runtime validation of what it sends back.
 import { z } from 'zod';
 import { shop } from '../config/shop.ts';
-import { toSlotOption } from '../domain/availability.ts';
+import { toSlotOption, type UnavailableReason } from '../domain/availability.ts';
 import { DATE_INPUT_PATTERN } from '../domain/dates.ts';
 import { normalizePhone } from '../domain/phone.ts';
+import { spokenTime } from '../domain/spoken-time.ts';
 import type { BookingResult, BookingService } from '../services/booking-service.ts';
 import type { CallLogService } from '../services/call-log-service.ts';
 
@@ -125,6 +126,25 @@ function explainInvalidPhone(result: unknown): unknown {
 }
 
 // Remembers what a successful booking action tells us about the call.
+// Why a time can't be booked, in the caller's terms. The other reasons
+// (unknown service, needs a quote, a malformed time) have no alternatives and
+// are handled by other rules.
+const WHY_UNAVAILABLE: Partial<Record<UnavailableReason, string>> = {
+  booked: "it's already booked",
+  in_past: 'that time has passed',
+  closed: "we're closed that day",
+  outside_hours: "it's outside our opening hours",
+  not_on_slot: `appointments start every ${shop.slotMinutes} minutes`,
+};
+
+function unavailableMessage(time: string, why: string, alternatives: { label: string }[]): string {
+  const offer = alternatives
+    .slice(0, 2)
+    .map((a) => a.label)
+    .join(' or ');
+  return `First say ${time} isn't available (${why}).${offer ? ` Then offer ${offer}.` : ''}`;
+}
+
 function remember(call: CallState, result: BookingResult): BookingResult {
   if (result.ok) {
     call.changedThisTurn = true;
@@ -193,9 +213,19 @@ export const tools: readonly Tool[] = [
     input: z.strictObject({ serviceId, date, time }),
     async run(input, { services }) {
       const result = await services.bookings.checkAvailability(input);
-      return result.available
-        ? { available: true, slot: toSlotOption(result.slot) }
-        : { available: false, reason: result.reason, alternatives: result.alternatives.map((s) => toSlotOption(s)) };
+      if (result.available) {
+        return { available: true, slot: toSlotOption(result.slot) };
+      }
+      const alternatives = result.alternatives.map((s) => toSlotOption(s));
+      const why = WHY_UNAVAILABLE[result.reason];
+      return {
+        available: false,
+        reason: result.reason,
+        alternatives,
+        // Given only the alternatives, the model often listed them without
+        // saying the time asked for was taken, and the caller had to ask why.
+        ...(why && { tellCaller: unavailableMessage(spokenTime(input.time), why, alternatives) }),
+      };
     },
   }),
 

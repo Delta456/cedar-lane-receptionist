@@ -222,6 +222,21 @@ test('check_availability returns slot options the model can book from', async ()
   });
 });
 
+test('a taken time comes back with what to tell the caller, before the alternatives', async () => {
+  await bookSara();
+  const result = await run('check_availability', {
+    serviceId: 'interior-detail-wash',
+    date: '2026-11-05',
+    time: '10:00',
+  });
+  assert.equal(result.reason, 'booked');
+  const labels = (result.alternatives as { label: string }[]).map((a) => a.label);
+  assert.equal(
+    result.tellCaller,
+    `First say 10 AM isn't available (it's already booked). Then offer ${labels[0]} or ${labels[1]}.`,
+  );
+});
+
 test('an unknown service id is rejected with the valid choices', async () => {
   const result = await run('check_availability', { serviceId: 'oil-change', date: '2026-11-05', time: '10:00' });
   assert.equal(result.reason, 'invalid_input');

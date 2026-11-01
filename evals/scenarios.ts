@@ -58,6 +58,15 @@ function saraBooking(calendar: FakeCalendarStore, start: string, serviceId = 'in
   });
 }
 
+// The first reply must say the time asked for is taken before offering
+// others: in the demo, the agent only listed alternatives, and the caller had
+// to ask why.
+const SAYS_UNAVAILABLE = /not available|isn't available|unavailable|not open|isn't open|booked|taken|full/i;
+function saysTimeIsTaken(r: ScenarioResult): string[] {
+  const first = r.replies[0] ?? '';
+  return SAYS_UNAVAILABLE.test(first) ? [] : [`offered other times without saying 3:30 is taken: "${first}"`];
+}
+
 // The test booking that makes 3:30 Thursday full, as on the real calendar.
 function thursdayAt330(calendar: FakeCalendarStore) {
   calendar.add({
@@ -113,6 +122,7 @@ export const scenarios: Scenario[] = [
     check(r) {
       const booked = owned(r, SARA);
       const problems = booked.length === 1 ? [] : [`expected 1 booking for Sara, got ${booked.length}`];
+      problems.push(...saysTimeIsTaken(r));
       const event = booked[0];
       if (event && !event.start.equals(at('2026-11-05T16:30'))) {
         problems.push(`booked at ${event.start.toISO()}, expected Thursday 16:30`);
@@ -373,6 +383,22 @@ export const scenarios: Scenario[] = [
       'Thanks, bye.',
     ],
     check: (r) => [...expectNoNewBookings(r, 0), ...expectOneCall(r, { needsHuman: true, phone: MIKE })],
+  },
+  {
+    name: 'says the time asked for is taken, then offers others',
+    setup: thursdayAt330,
+    caller: [
+      'Hi, I would like to book an appointment for interior detail and wash at 5th November 2026 at 3:30pm',
+      'Sure, 4:30 works.',
+      'Sara, 415-555-0190.',
+      "That's all, bye.",
+    ],
+    check(r) {
+      const problems = saysTimeIsTaken(r);
+      if (!owned(r, SARA)[0]?.start.equals(at('2026-11-05T16:30')))
+        problems.push('no booking for Sara on Thursday at 4:30');
+      return problems;
+    },
   },
   {
     // From a voice call: speech-to-text heard "Thursday" as "seven o'clock",

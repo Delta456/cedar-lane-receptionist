@@ -78,6 +78,9 @@ test('a reply saying the caller is noted as late is recognised; questions and po
     "I've noted that you're running late.",
     "No problem, I'll make a note that you're running late.",
     "I've let the shop know you're running late.",
+    // From the eval: said without calling mark_running_late.
+    'I am marking you as running late for today. Anything else?',
+    "I'm noting that you'll be 40 minutes late.",
   ]) {
     assert.equal(claimsLateNote(reply), true, reply);
   }

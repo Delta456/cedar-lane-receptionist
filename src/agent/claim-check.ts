@@ -76,7 +76,7 @@ export async function checkBookingClaim(llm: OpenAI, model: string, reply: strin
 // late?") and refusals ("I can't mark you as late without a booking") are
 // skipped.
 const LATE_NOTE =
-  /\b(i|i've|i'll|i have|i will|we|we've|we'll)\b[^.!?]{0,20}\b(mark(ed)?|not(e|ed)|let (the shop|the team|them) know)\b[^.!?]*\blate\b/i;
+  /\b(i|i've|i'll|i have|i will|we|we've|we'll)\b[^.!?]{0,20}\b(mark(ed|ing)?|not(e|ed|ing)|let (the shop|the team|them) know)\b[^.!?]*\blate\b/i;
 
 const REFUSAL = /\b(can't|cannot|couldn't|could not|unable|not able|won't|wasn't able)\b/i;
 
