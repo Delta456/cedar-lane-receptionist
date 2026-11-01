@@ -86,3 +86,12 @@ export function claimsLateNote(reply: string): boolean {
     (sentence) => !sentence.trim().endsWith('?') && !REFUSAL.test(sentence) && LATE_NOTE.test(sentence),
   );
 }
+
+// A reply telling the caller a time can't be booked. No bare "full" or
+// "booked": "full detail" is a service, and "get you booked" is an offer.
+const SAYS_UNAVAILABLE =
+  /\b(not available|isn't available|unavailable|not free|isn't free|not open|isn't open|already booked|is booked|been booked|fully booked|booked up|taken|closed|has passed|already passed|outside)\b/i;
+
+export function saysUnavailable(reply: string): boolean {
+  return SAYS_UNAVAILABLE.test(reply);
+}

@@ -58,13 +58,17 @@ function saraBooking(calendar: FakeCalendarStore, start: string, serviceId = 'in
   });
 }
 
-// The first reply must say the time asked for is taken before offering
+// Some reply must say the time asked for is taken before (or while) offering
 // others: in the demo, the agent only listed alternatives, and the caller had
-// to ask why.
-const SAYS_UNAVAILABLE = /not available|isn't available|unavailable|not open|isn't open|booked|taken|full/i;
+// to ask why. Not necessarily the first reply: the agent may first ask which
+// service "car washing" means.
+// No bare "booked": every confirmation says "Booked you in".
+const SAYS_UNAVAILABLE =
+  /not available|isn't available|unavailable|not open|isn't open|(already|is|been|fully) booked|booked up|taken|\bfull\b(?! detail)/i;
 function saysTimeIsTaken(r: ScenarioResult): string[] {
-  const first = r.replies[0] ?? '';
-  return SAYS_UNAVAILABLE.test(first) ? [] : [`offered other times without saying 3:30 is taken: "${first}"`];
+  return r.replies.some((reply) => SAYS_UNAVAILABLE.test(reply))
+    ? []
+    : [`never said 3:30 is taken: "${r.replies.slice(0, 2).join(' / ')}"`];
 }
 
 // The test booking that makes 3:30 Thursday full, as on the real calendar.
@@ -383,6 +387,23 @@ export const scenarios: Scenario[] = [
       'Thanks, bye.',
     ],
     check: (r) => [...expectNoNewBookings(r, 0), ...expectOneCall(r, { needsHuman: true, phone: MIKE })],
+  },
+  {
+    // From the demo: the agent asked for a name and number as if 3:30 were free.
+    name: "says the time asked for is taken, for a car wash in the caller's words",
+    setup: thursdayAt330,
+    caller: [
+      'Hi, I would like to book an appointment at 5th November 3:30pm for an exterior car wash',
+      'Sure, 4:30 works.',
+      'Mike, 650-555-0142.',
+      "That's all, bye.",
+    ],
+    check(r) {
+      const problems = saysTimeIsTaken(r);
+      const event = owned(r, MIKE)[0];
+      if (!event?.start.equals(at('2026-11-05T16:30'))) problems.push('no booking for Mike on Thursday at 4:30');
+      return problems;
+    },
   },
   {
     name: 'says the time asked for is taken, then offers others',

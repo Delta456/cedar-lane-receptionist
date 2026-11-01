@@ -14,7 +14,7 @@ import { createLogger, type Logger } from '../lib/logger.ts';
 import { SerialQueue } from '../lib/serial-queue.ts';
 import type { CallLog } from '../services/call-log-service.ts';
 import { type CallSummary, summarizeCall } from './call-summary.ts';
-import { checkBookingClaim, claimsLateNote } from './claim-check.ts';
+import { checkBookingClaim, claimsLateNote, saysUnavailable } from './claim-check.ts';
 import { buildSystemPrompt, type Channel } from './prompt.ts';
 import { createTextToolCallDetector } from './text-tool-calls.ts';
 import { type CallState, findTool, newCallState, type Services, type Tool, tools } from './tools.ts';
@@ -69,6 +69,9 @@ const BOOKING_CHANGES = new Set(['book_appointment', 'reschedule_appointment', '
 // and mark_running_late hasn't succeeded in this call.
 const UNBACKED_LATE_NOTE =
   "[Check: you told the caller you've noted, or will note, that they're running late, but mark_running_late hasn't succeeded. Call it now with their phone number, name and how late they'll be, then tell them what it says.]";
+// Sent when a check this turn found the caller's time unavailable and the
+// reply doesn't say so. The tool result's tellCaller is added after it.
+const UNTOLD_UNAVAILABLE = "[Check: your reply didn't tell the caller that the time they asked for isn't available.";
 const UNBACKED_CLAIM =
   "[Check: you just told the caller a booking was made, moved or cancelled, but no booking tool succeeded in this turn. If the caller confirmed the change, call the tool now. If not, don't claim it; ask them to confirm.";
 
@@ -244,6 +247,7 @@ export class Conversation {
 
     let corrected = false;
     let lateCorrected = false;
+    let unavailableCorrected = false;
 
     for (let step = 0; step < MAX_STEPS; step++) {
       const message = await this.complete();
@@ -282,6 +286,16 @@ export class Conversation {
           lateCorrected = true;
           this.log.warn('unbacked_late_note');
           this.messages.push({ role: 'user', content: UNBACKED_LATE_NOTE });
+          continue;
+        }
+        // A caller who asked for a taken time must hear that it's taken.
+        // The tool result says so (tellCaller), but the model sometimes
+        // skipped it and asked for a name and number as if it were free.
+        const untold = untoldUnavailable(toolCalls);
+        if (!unavailableCorrected && untold && !saysUnavailable(text)) {
+          unavailableCorrected = true;
+          this.log.warn('untold_unavailable');
+          this.messages.push({ role: 'user', content: `${UNTOLD_UNAVAILABLE} ${untold} Then reply to the caller.]` });
           continue;
         }
         return this.reply(text, toolCalls);
@@ -402,6 +416,16 @@ export class Conversation {
 }
 
 // What the caller must be told about booking actions that succeeded.
+// What to tell the caller, if this turn's last availability check or booking
+// change was a check that found the time unavailable. A later booking or a
+// successful check means the caller has moved on.
+function untoldUnavailable(toolCalls: ToolCall[]): string | null {
+  const last = toolCalls.findLast((c) => c.name === 'check_availability' || BOOKING_CHANGES.has(c.name));
+  const result =
+    last?.name === 'check_availability' ? (last.result as { available?: unknown; tellCaller?: unknown }) : null;
+  return result?.available === false && typeof result.tellCaller === 'string' ? result.tellCaller : null;
+}
+
 function confirmations(toolCalls: ToolCall[]): string[] {
   return toolCalls.flatMap((call) => {
     const result = call.result as { ok?: unknown; booking?: { service: string; when: string } } | null;

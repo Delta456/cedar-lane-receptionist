@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type OpenAI from 'openai';
-import { checkBookingClaim, claimsLateNote } from '../../src/agent/claim-check.ts';
+import { checkBookingClaim, claimsLateNote, saysUnavailable } from '../../src/agent/claim-check.ts';
 
 // A model that answers the verdict question with a fixed answer, or fails.
 function judge(answer: boolean | Error | string) {
@@ -93,5 +93,23 @@ test('a reply saying the caller is noted as late is recognised; questions and po
     'We close at 6 PM.',
   ]) {
     assert.equal(claimsLateNote(reply), false, reply);
+  }
+});
+
+test('a reply saying a time is taken is recognised; offers and service names are not', () => {
+  for (const reply of [
+    'I am sorry, 3:30 PM on November 5th is booked. Would 3 PM work?',
+    "3:30 PM isn't available it's already booked.",
+    "That time's taken. How about 4:30 PM?",
+    "We're closed on Sundays.",
+  ]) {
+    assert.equal(saysUnavailable(reply), true, reply);
+  }
+  for (const reply of [
+    'What is your name and phone number?',
+    'Do you want Thursday, Nov 5 at 4:30 PM or 2:30 PM?',
+    'I can get you booked for a full detail at 4:30 PM.',
+  ]) {
+    assert.equal(saysUnavailable(reply), false, reply);
   }
 });

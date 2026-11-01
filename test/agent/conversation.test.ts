@@ -331,6 +331,53 @@ test("on a call with caller ID, the agent is told the caller's number", async ()
   assert.match(JSON.stringify(requests[0]?.messages[0]), /ending in 0190/);
 });
 
+// The booking-claim check's answer when a reply makes no claim.
+const noClaim = { toolCalls: [{ name: 'verdict', args: { claimsChange: false } }] };
+
+test('a reply that skips telling the caller their time is taken is sent back once', async () => {
+  // Thursday 3:30 is taken, as in the brief.
+  calendar.add({
+    summary: 'Interior detail & wash',
+    description: '',
+    start: DateTime.fromISO('2026-11-05T15:30', { zone: shop.timezone }),
+    end: DateTime.fromISO('2026-11-05T16:30', { zone: shop.timezone }),
+    busy: true,
+    owner: null,
+  });
+  const check = { name: 'check_availability', args: { serviceId: 'exterior-wash', date: '2026-11-05', time: '15:30' } };
+  const { conversation: c, requests } = conversation([
+    { toolCalls: [check] },
+    // From the demo: asked for details as if 3:30 were free.
+    { content: 'What is your name and phone number?' },
+    { content: 'Sorry, 3:30 PM is booked. Would 3 PM or 4:30 PM work?' },
+    // "is booked" makes the booking-claim check ask the model; it says no.
+    noClaim,
+  ]);
+  const turn = await c.send('I would like to book a car wash on 5th November at 3:30pm.');
+  assert.equal(turn.reply, 'Sorry, 3:30 PM is booked. Would 3 PM or 4:30 PM work?');
+  assert.match(String(requests[2]?.messages.at(-1)?.content), /isn't available.*First say 3:30 PM isn't available/);
+});
+
+test('a reply that says the time is taken is not questioned', async () => {
+  calendar.add({
+    summary: 'Interior detail & wash',
+    description: '',
+    start: DateTime.fromISO('2026-11-05T15:30', { zone: shop.timezone }),
+    end: DateTime.fromISO('2026-11-05T16:30', { zone: shop.timezone }),
+    busy: true,
+    owner: null,
+  });
+  const check = { name: 'check_availability', args: { serviceId: 'exterior-wash', date: '2026-11-05', time: '15:30' } };
+  const { conversation: c, requests } = conversation([
+    { toolCalls: [check] },
+    { content: "3:30 PM isn't available, it's already booked. Would 3 PM or 4:30 PM work?" },
+    noClaim,
+  ]);
+  await c.send('Can I get a car wash on 5th November at 3:30pm?');
+  // The tool call, the reply and the claim check: no correction.
+  assert.equal(requests.length, 3);
+});
+
 test('saying the caller is noted as late, with no running-late note made, is sent back once', async () => {
   calendar.add({
     summary: 'Exterior wash – Sara',
