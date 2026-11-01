@@ -114,9 +114,10 @@ export function soundsFinished(message: string): boolean {
 // "invalid_phone" left the agent repeating "that number seems invalid" to a
 // caller in India, who had no way of knowing it needed a country code. The
 // country code comes first: the model kept the start of a longer note and
-// dropped the rest.
+// dropped the rest. Written as words for the caller: worded as instructions
+// ("Ask whether it's a US number..."), it was read out on a call.
 const PHONE_HELP =
-  'That number was refused. Ask whether it\'s a US number: if not, they need to say the country code first, like "plus nine one" for India. Then ask for the whole number again, digit by digit.';
+  "Sorry, I didn't get a complete number. Is it a US number? If not, please say the country code first, like plus nine one for India, then the whole number, digit by digit.";
 
 function explainInvalidPhone(result: unknown): unknown {
   const { reason, tellCaller } = (result ?? {}) as { reason?: unknown; tellCaller?: unknown };
@@ -202,7 +203,7 @@ function verifyingName(given: string | null, call: CallState): string | undefine
 const NAME_REQUIRED = {
   ok: false,
   reason: 'name_required',
-  tellCaller: 'Ask for the name the booking is under.',
+  tellCaller: 'What name is the booking under?',
 } as const;
 
 // Inputs are strict objects (no unknown keys). Fields are required unless
@@ -401,7 +402,7 @@ export const tools: readonly Tool[] = [
           ? {
               ...result,
               tellCaller:
-                "There's no booking today under that number and name. Ask if it's under a different number or name.",
+                "I can't find a booking for today under that number and name. Could it be under a different number or name?",
             }
           : result;
       }
@@ -412,8 +413,8 @@ export const tools: readonly Tool[] = [
       return {
         ...result,
         tellCaller: result.withinGracePeriod
-          ? `No problem: we hold the slot for ${minutes} minutes, so they're fine.`
-          : `We only hold the slot for ${minutes} minutes, so it may not be kept. Offer to reschedule.`,
+          ? `No problem, we hold the slot for ${minutes} minutes, so you're fine.`
+          : `Thanks for letting us know. We only hold the slot for ${minutes} minutes, so it may not be kept. Would you like to reschedule?`,
       };
     },
   }),
@@ -437,14 +438,14 @@ export const tools: readonly Tool[] = [
       }
       const name = input.name.trim();
       if (!name) {
-        return { ok: false, reason: 'missing_name', tellCaller: 'Ask for their name.' };
+        return { ok: false, reason: 'missing_name', tellCaller: 'Can I get your name, please?' };
       }
       call.callback = { name, phone: callbackPhone, reason: input.reason.trim() };
       call.phone ??= callbackPhone;
       call.name ??= name;
       return {
         ok: true,
-        tellCaller: `Tell them someone from the shop will call them back on the number ending in ${callbackPhone.slice(-4)}.`,
+        tellCaller: `Someone from the shop will call you back on the number ending in ${callbackPhone.slice(-4)}.`,
       };
     },
   }),
@@ -461,7 +462,7 @@ export const tools: readonly Tool[] = [
         return {
           ok: false,
           reason: 'too_soon',
-          tellCaller: "Tell the caller what was just done and ask if there's anything else. Don't hang up yet.",
+          note: "Not hung up: tell the caller what was just done and ask if there's anything else.",
         };
       }
       // Only hang up when the caller's own words say they're finishing. Asked
@@ -470,7 +471,7 @@ export const tools: readonly Tool[] = [
         return {
           ok: false,
           reason: 'caller_not_done',
-          tellCaller: "The caller hasn't said they're done. Ask what else you can help with; don't hang up.",
+          note: "Not hung up: the caller hasn't said they're done. Ask what else you can help with.",
         };
       }
       call.endRequested = true;

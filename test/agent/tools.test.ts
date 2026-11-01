@@ -135,7 +135,7 @@ test('end_call marks the call to end, but not in a turn that changed a booking',
 test('a callback needs a complete number, as on the real call where only five digits came through', async () => {
   const fragment = await run('request_callback', { name: 'David', phone: 'seven nine seven seven five', reason: 'x' });
   assert.equal(fragment.reason, 'invalid_phone');
-  assert.match(String(fragment.tellCaller), /whole number again/);
+  assert.match(String(fragment.tellCaller), /the whole number, digit by digit/);
   assert.match(String(fragment.tellCaller), /country code/);
   assert.equal(context.call.callback, null);
 
@@ -325,7 +325,7 @@ test('running late beyond the grace period tells the agent to offer a reschedule
   assert.match(String(late.tellCaller), /15 minutes.*reschedule/);
 
   const onTime = await run('mark_running_late', { phone: SARA, name: 'Sara', minutesLate: 5 });
-  assert.match(String(onTime.tellCaller), /they're fine/);
+  assert.match(String(onTime.tellCaller), /you're fine/);
 });
 
 test('running late needs the name without caller ID, and says when there is no booking today', async () => {

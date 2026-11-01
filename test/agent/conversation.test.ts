@@ -525,7 +525,7 @@ test('a refused number must be followed by the country code question', async () 
   ]);
   const turn = await c.send('Ravi, 9811416685');
   assert.match(turn.reply, /country code/);
-  assert.match(String(requests[2]?.messages.at(-1)?.content), /didn't do what the tool result asked/);
+  assert.match(String(requests[2]?.messages.at(-1)?.content), /the number was refused/);
 });
 
 test('an ordinary turn does not end the call', async () => {

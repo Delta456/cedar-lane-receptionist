@@ -411,7 +411,10 @@ export class Conversation {
     const refused = toolCalls.findLast((c) => (c.result as { reason?: unknown } | null)?.reason === 'invalid_phone');
     const help = (refused?.result as { tellCaller?: unknown } | undefined)?.tellCaller;
     if (typeof help === 'string' && !mentionsCountryCode(text)) {
-      return { why: 'country_code', note: `[Check: your reply didn't do what the tool result asked. ${help}]` };
+      return {
+        why: 'country_code',
+        note: `[Check: the number was refused. Tell the caller, in your own words: "${help}"]`,
+      };
     }
     if (asksVagueQuestionNeedlessly(text, userText)) {
       return { why: 'vague_question', note: NEEDLESS_QUESTION };

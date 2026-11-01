@@ -4,7 +4,7 @@ Guidance for AI coding agents (and humans) working in this repository.
 
 ## What this is
 
-An AI phone receptionist for a small auto detailing shop, Cedar Lane Auto Detailing. Callers book, reschedule and cancel appointments, ask questions, or call with a problem. The agent checks and changes bookings on a **Google Calendar**, and logs every call to a **Google Sheet** (a `Calls` tab plus one `Contacts` row per caller). Phase 1 is a text chat (`channels/chat/`). Phase 2 puts the same agent on phone calls through Vapi (`channels/voice/`); it's had nine test calls (web calls through Vapi) so far.
+An AI phone receptionist for a small auto detailing shop, Cedar Lane Auto Detailing. Callers book, reschedule and cancel appointments, ask questions, or call with a problem. The agent checks and changes bookings on a **Google Calendar**, and logs every call to a **Google Sheet** (a `Calls` tab plus one `Contacts` row per caller). Phase 1 is a text chat (`channels/chat/`). Phase 2 puts the same agent on phone calls through Vapi (`channels/voice/`); it's had eleven test calls (web calls through Vapi) so far.
 
 The model is NVIDIA's **Nemotron 3.5 Bolt E4B**, a small model (4B effective parameters), called through NVIDIA's OpenAI-compatible API with the `openai` SDK. Any OpenAI-compatible endpoint works through `LLM_BASE_URL` and `LLM_MODEL`.
 
@@ -115,7 +115,7 @@ When you fix a model mistake, prefer a code-level fix (validation, a guard, a cl
 
 ## Adding things
 
-- **A tool:** add a `defineTool({ name, description, input: z.strictObject({...}), run })` entry in `agent/tools.ts` and keep `run` a thin call into a service. Make fields required unless leaving one out has an obvious meaning, and add it to `OPTIONAL_FIELDS` in `test/agent/tools.test.ts` if so. Booking actions should call `remember(call, result)` so the call log can link them. When the model must act on a result, spell it out in the result (`tellCaller`, `note`) rather than leaving a bare flag: the model ignored `withinGracePeriod: false` until the result said what to tell the caller.
+- **A tool:** add a `defineTool({ name, description, input: z.strictObject({...}), run })` entry in `agent/tools.ts` and keep `run` a thin call into a service. Make fields required unless leaving one out has an obvious meaning, and add it to `OPTIONAL_FIELDS` in `test/agent/tools.test.ts` if so. Booking actions should call `remember(call, result)` so the call log can link them. When the model must act on a result, spell it out in the result (`tellCaller`, `note`) rather than leaving a bare flag: the model ignored `withinGracePeriod: false` until the result said what to tell the caller. **`tellCaller` is the words to say, written as you'd say them to the caller** ("Sorry, I didn't get a complete number. Is it a US number?"); instructions for the agent go in `note`. The model sometimes reads `tellCaller` out word for word, and on calls it read out notes written as instructions ("First say...", "Ask whether it's a US number...").
 - **A shop fact** (service, price, hours, policy, or an answer to any other common question via `faq`): change `config/shop.ts`. The prompt is generated from it, so don't hard-code shop facts in the prompt.
 - **A booking rule:** put it in `domain/` if it's pure, or in `services/booking-service.ts` if it needs the calendar, with unit tests either way.
 
