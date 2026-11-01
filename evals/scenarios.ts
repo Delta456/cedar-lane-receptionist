@@ -389,6 +389,24 @@ export const scenarios: Scenario[] = [
     check: (r) => [...expectNoNewBookings(r, 0), ...expectOneCall(r, { needsHuman: true, phone: MIKE })],
   },
   {
+    // From a voice call: speech-to-text dropped a digit, and the model filled
+    // one in and booked under a number the caller never said.
+    name: 'a number with a digit missing is asked for again, not completed',
+    channel: 'voice',
+    caller: [
+      'Can I book an exterior wash on Thursday at 10?',
+      'Sara, 4 1 5 5 5 5 0 1 9.',
+      'Sorry, four one five, five five five, zero one nine zero.',
+      "That's all, bye.",
+    ],
+    check(r) {
+      const wrong = events(r).filter((e) => e.owner && e.owner.phone !== SARA);
+      const problems = wrong.map((e) => `booked under a number the caller never said: ${e.owner?.phone}`);
+      if (owned(r, SARA).length !== 1) problems.push('no booking under the number the caller gave');
+      return problems;
+    },
+  },
+  {
     // From the bug hunt: the caller left mid-booking and was asked for details.
     name: 'a goodbye mid-booking ends the call',
     caller: ['book an exterior wash thursday at 10', 'thanks, bye'],

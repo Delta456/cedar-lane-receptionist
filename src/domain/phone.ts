@@ -46,6 +46,33 @@ const TENS: Readonly<Record<string, number>> = {
 const REPEATS: Readonly<Record<string, number>> = { double: 2, triple: 3 };
 
 export function normalizePhone(input: string): string | null {
+  const firstDigit = input.search(/\d/);
+  const plusBeforeDigits = input.slice(0, firstDigit === -1 ? input.length : firstDigit).includes('+');
+  const { digits: spoken, international: saidPlus } = readDigits(input);
+  let digits = spoken;
+  const international = plusBeforeDigits || saidPlus;
+
+  if (international) {
+    const number = parsePhoneNumberFromString(`+${digits}`);
+    return number?.isValid() ? number.number : null;
+  }
+  if (digits.length === 11 && digits.startsWith('1')) {
+    digits = digits.slice(1);
+  }
+  // Area codes and exchanges never start with 0 or 1.
+  if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) {
+    return null;
+  }
+  return `+1${digits}`;
+}
+
+// Every digit in a text, typed or spoken ("four one five", "double five",
+// "ninety"), in order. Words that aren't digits are skipped.
+export function spokenDigits(input: string): string {
+  return readDigits(input).digits;
+}
+
+function readDigits(input: string): { digits: string; international: boolean } {
   const tokens = input
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
@@ -54,9 +81,9 @@ export function normalizePhone(input: string): string | null {
   let digits = '';
   // "double five" means 55.
   let repeat = 1;
-  // A "+" or the word "plus" before any digit means a country code follows.
-  const firstDigit = input.search(/\d/);
-  let international = input.slice(0, firstDigit === -1 ? input.length : firstDigit).includes('+');
+  // The word "plus" before any digit means a country code follows (a typed
+  // "+" is checked by normalizePhone).
+  let international = false;
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i] ?? '';
@@ -96,19 +123,7 @@ export function normalizePhone(input: string): string | null {
     }
     // Anything else ("my", "number", "is", "plus") is filler.
   }
-
-  if (international) {
-    const number = parsePhoneNumberFromString(`+${digits}`);
-    return number?.isValid() ? number.number : null;
-  }
-  if (digits.length === 11 && digits.startsWith('1')) {
-    digits = digits.slice(1);
-  }
-  // Area codes and exchanges never start with 0 or 1.
-  if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) {
-    return null;
-  }
-  return `+1${digits}`;
+  return { digits, international };
 }
 
 // "+14155550190" becomes "(415) 555-0190".

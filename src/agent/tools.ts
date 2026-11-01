@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { shop } from '../config/shop.ts';
 import { toSlotOption, type UnavailableReason } from '../domain/availability.ts';
 import { DATE_INPUT_PATTERN } from '../domain/dates.ts';
-import { normalizePhone } from '../domain/phone.ts';
+import { normalizePhone, spokenDigits } from '../domain/phone.ts';
 import { spokenTime } from '../domain/spoken-time.ts';
 import type { BookingResult, BookingService } from '../services/booking-service.ts';
 import type { CallLogService } from '../services/call-log-service.ts';
@@ -164,8 +164,29 @@ function remember(call: CallState, result: BookingResult): BookingResult {
 // the model passed. The model converts spoken digits itself and got them
 // wrong: given "six five oh, five five five, oh one four two" after an
 // earlier fragment, it passed an 11-digit merge of the two.
+//
+// If the caller said a number this turn, the model's may only use its digits,
+// in order (it can leave out a time said alongside). On a call, speech-to-text
+// dropped a digit of "415 555 0190", and the model filled one in and booked
+// under 415-555-5019. Then the caller's own incomplete words are used, which
+// the tool refuses, so the agent asks for the number again.
 function ownerPhone(given: string, call: CallState): string {
-  return call.callerPhone ?? normalizePhone(call.callerMessage) ?? given;
+  if (call.callerPhone) return call.callerPhone;
+  const parsed = normalizePhone(call.callerMessage);
+  if (parsed) return parsed;
+  const said = spokenDigits(call.callerMessage);
+  // Seven or more digits is a go at a phone number; fewer is a time or date
+  // ("move it to 4:30"), and the number came in an earlier turn.
+  return said.length >= 7 && !inOrderWithin(given.replace(/\D/g, ''), said) ? call.callerMessage : given;
+}
+
+// Whether every digit of `part` appears in `whole`, in the same order.
+function inOrderWithin(part: string, whole: string): boolean {
+  let next = 0;
+  for (const digit of whole) {
+    if (digit === part[next]) next++;
+  }
+  return next === part.length;
 }
 
 // Without caller ID, a number alone doesn't prove who's calling, so finding

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatPhone, normalizePhone } from '../../src/domain/phone.ts';
+import { formatPhone, normalizePhone, spokenDigits } from '../../src/domain/phone.ts';
 
 test('typed formats all normalise to the same number', () => {
   for (const input of ['415-555-0190', '(415) 555-0190', '415.555.0190', '4155550190', '+1 415 555 0190']) {
@@ -45,4 +45,10 @@ test('a number with a country code is checked for its own country, as for a test
   assert.equal(normalizePhone('plus nine one nine seven one one'), null);
   assert.equal(normalizePhone('nine eight double one four one double six eight five'), null);
   assert.equal(formatPhone('+919811416685'), '+91 98114 16685');
+});
+
+test('spokenDigits reads every digit, typed or spoken, in order', () => {
+  assert.equal(spokenDigits('Sarah, 4 1 5 5 5 5 0 1 9.'), '415555019');
+  assert.equal(spokenDigits('six five oh, double five, ninety'), '6505590');
+  assert.equal(spokenDigits('Thursday at 4:30'), '430');
 });

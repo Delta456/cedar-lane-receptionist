@@ -197,6 +197,45 @@ test('a booking saves the contact straight away, once per call', async () => {
   assert.equal(callStore.contacts.get(SARA)?.totalCalls, 1);
 });
 
+test("a digit speech-to-text dropped isn't filled in by the model", async () => {
+  // From a call: "415 555 0190" was heard as nine digits, and the model
+  // booked under 415-555-5019.
+  context.call.callerMessage = 'Sarah, 4 1 5 5 5 5 0 1 9.';
+  const result = await run('book_appointment', {
+    serviceId: 'interior-detail-wash',
+    date: '2026-11-05',
+    time: '16:30',
+    name: 'Sarah',
+    phone: '415-555-5019',
+  });
+  assert.equal(result.reason, 'invalid_phone');
+  assert.equal(calendar.events.size, 0);
+});
+
+test('a number said with a time is still taken from the model when its digits match', async () => {
+  context.call.callerMessage = 'Thursday at 4:30, Sara, 415 555 0190';
+  const result = await run('book_appointment', {
+    serviceId: 'interior-detail-wash',
+    date: '2026-11-05',
+    time: '16:30',
+    name: 'Sara',
+    phone: '415-555-0190',
+  });
+  assert.equal(result.ok, true);
+});
+
+test('a number from an earlier turn is used when the caller only says a time', async () => {
+  context.call.callerMessage = 'Can you make it 4:30 instead?';
+  const result = await run('book_appointment', {
+    serviceId: 'interior-detail-wash',
+    date: '2026-11-05',
+    time: '16:30',
+    name: 'Sara',
+    phone: '415-555-0190',
+  });
+  assert.equal(result.ok, true);
+});
+
 test('a 12-hour time is sent back with the format to use', async () => {
   const result = await run('check_availability', {
     serviceId: 'interior-detail-wash',
