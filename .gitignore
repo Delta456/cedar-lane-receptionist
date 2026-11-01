@@ -1,0 +1,12 @@
+node_modules/
+.env
+
+# Google service account keys
+key.json
+*-key.json
+credentials*.json
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store

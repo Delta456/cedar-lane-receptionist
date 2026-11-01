@@ -1,0 +1,36 @@
+{
+  "name": "cedar-lane-receptionist",
+  "description": "AI receptionist for Cedar Lane Auto Detailing",
+  "scripts": {
+    "start": "node --env-file=.env src/main.ts",
+    "dev": "node --env-file=.env --watch src/main.ts",
+    "vapi:setup": "node --env-file=.env src/channels/voice/setup.ts",
+    "smoke": "node --env-file=.env src/scripts/smoke-test.ts",
+    "test": "node --import ./test/support/setup.ts --test 'test/**/*.test.ts'",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "fix": "biome check --write .",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "eval": "node --env-file=.env evals/run.ts"
+  },
+  "type": "module",
+  "dependencies": {
+    "googleapis": "^189.0.0",
+    "libphonenumber-js": "^1.13.15",
+    "luxon": "^3.7.2",
+    "openai": "^7.45.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@types/luxon": "^3.7.6",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  },
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  }
+}

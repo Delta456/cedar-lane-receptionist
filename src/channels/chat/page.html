@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cedar Lane Receptionist</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 640px; margin: 24px auto; padding: 0 16px; }
+    #log { border: 1px solid #ccc; border-radius: 8px; padding: 12px; height: 60vh; overflow-y: auto; }
+    .caller { text-align: right; }
+    .caller span { background: #dbeafe; }
+    .agent span { background: #f1f5f9; }
+    .msg span { display: inline-block; padding: 6px 10px; border-radius: 8px; margin: 3px 0; max-width: 85%; text-align: left; }
+    details { font-size: 12px; color: #555; margin: 2px 0 6px; }
+    pre { white-space: pre-wrap; margin: 4px 0; }
+    form { display: flex; gap: 8px; margin-top: 12px; }
+    input { flex: 1; padding: 8px; font: inherit; }
+  </style>
+</head>
+<body>
+  <h1>Cedar Lane Auto Detailing</h1>
+  <div id="log"></div>
+  <form id="form">
+    <input id="text" placeholder="Say something to the receptionist…" autocomplete="off">
+    <button type="submit">Send</button>
+    <button type="button" id="end">End call</button>
+    <button type="button" id="new">New call</button>
+  </form>
+  <script>
+    let sessionId = crypto.randomUUID();
+    // True once something was said in this call and it hasn't been ended yet.
+    let callOpen = false;
+    const log = document.getElementById('log');
+    const text = document.getElementById('text');
+
+    function add(who, message) {
+      const div = document.createElement('div');
+      div.className = `msg ${who}`;
+      const span = document.createElement('span');
+      span.textContent = message;
+      div.append(span);
+      log.append(div);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    // Shows which tools ran, so the Calendar and Sheet changes are traceable.
+    function addToolCalls(toolCalls) {
+      for (const call of toolCalls) {
+        const details = document.createElement('details');
+        const summary = document.createElement('summary');
+        summary.textContent = `tool: ${call.name}`;
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify({ input: call.input, result: call.result }, null, 2);
+        details.append(summary, pre);
+        log.append(details);
+      }
+    }
+
+    // One message at a time: the form is disabled until the reply arrives.
+    const buttons = document.querySelectorAll('button');
+    function setBusy(busy) {
+      text.disabled = busy;
+      for (const button of buttons) {
+        button.disabled = busy;
+      }
+      if (!busy) text.focus();
+    }
+
+    async function post(path, body) {
+      const res = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      return data;
+    }
+
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const message = text.value.trim();
+      if (!message) return;
+      text.value = '';
+      add('caller', message);
+      callOpen = true;
+      setBusy(true);
+      try {
+        const { reply, toolCalls, ended } = await post('/api/chat', { sessionId, message });
+        addToolCalls(toolCalls);
+        add('agent', reply);
+        // The agent hung up after saying goodbye; the server has logged the call.
+        if (ended) {
+          add('agent', '— call ended —');
+          sessionId = crypto.randomUUID();
+          callOpen = false;
+        }
+      } catch (err) {
+        add('agent', `Error: ${err.message}`);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    // Returns false if the server couldn't end the call.
+    async function endCall() {
+      setBusy(true);
+      try {
+        const { toolCalls } = await post('/api/end', { sessionId });
+        addToolCalls(toolCalls);
+        add('agent', '— call ended —');
+        return true;
+      } catch (err) {
+        add('agent', `Error: ${err.message}`);
+        return false;
+      } finally {
+        // The server forgets the session either way, so start a new one.
+        sessionId = crypto.randomUUID();
+        callOpen = false;
+        setBusy(false);
+      }
+    }
+
+    // Nothing to end if the call is already over (or nothing was said yet).
+    document.getElementById('end').addEventListener('click', () => {
+      if (callOpen) endCall();
+    });
+
+    // Clears the chat for a fresh call. A call still open is ended first, so
+    // it's logged like any other.
+    document.getElementById('new').addEventListener('click', async () => {
+      // Keep the chat on screen if ending failed, so the error stays visible.
+      if (callOpen && !(await endCall())) return;
+      log.replaceChildren();
+    });
+
+    // If the tab closes mid-call, tell the server, so the call is still logged.
+    window.addEventListener('pagehide', () => {
+      navigator.sendBeacon('/api/hangup', JSON.stringify({ sessionId }));
+    });
+
+    text.focus();
+  </script>
+</body>
+</html>
