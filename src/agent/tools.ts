@@ -125,7 +125,6 @@ function explainInvalidPhone(result: unknown): unknown {
     : result;
 }
 
-// Remembers what a successful booking action tells us about the call.
 // Why a time can't be booked, in the caller's terms. The other reasons
 // (unknown service, needs a quote, a malformed time) have no alternatives and
 // are handled by other rules.
@@ -145,6 +144,7 @@ function unavailableMessage(time: string, why: string, alternatives: { label: st
   return `First say ${time} isn't available (${why}).${offer ? ` Then offer ${offer}.` : ''}`;
 }
 
+// Remembers what a successful booking action tells us about the call.
 function remember(call: CallState, result: BookingResult): BookingResult {
   if (result.ok) {
     call.changedThisTurn = true;

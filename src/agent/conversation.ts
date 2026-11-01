@@ -415,7 +415,6 @@ export class Conversation {
   }
 }
 
-// What the caller must be told about booking actions that succeeded.
 // What to tell the caller, if this turn's last availability check or booking
 // change was a check that found the time unavailable. A later booking or a
 // successful check means the caller has moved on.
@@ -426,6 +425,7 @@ function untoldUnavailable(toolCalls: ToolCall[]): string | null {
   return result?.available === false && typeof result.tellCaller === 'string' ? result.tellCaller : null;
 }
 
+// What the caller must be told about booking actions that succeeded.
 function confirmations(toolCalls: ToolCall[]): string[] {
   return toolCalls.flatMap((call) => {
     const result = call.result as { ok?: unknown; booking?: { service: string; when: string } } | null;
