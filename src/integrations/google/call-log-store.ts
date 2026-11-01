@@ -5,6 +5,9 @@
 //
 // Row 1 of each tab is the header. Values are written RAW so a phone number
 // like "+14155550190" stays text, and nothing a caller says is run as a formula.
+// Contacts are matched on digits only: if someone edits a phone cell by hand,
+// Sheets turns "+41235646856" into the number 41235646856, and an exact match
+// would then add a second row for the same caller.
 import type { sheets_v4 } from 'googleapis';
 import type { CallLogStore, CallRecord, Contact } from '../../services/ports.ts';
 
@@ -34,7 +37,7 @@ export class GoogleSheetCallLogStore implements CallLogStore {
   }
 
   async findContact(phone: string): Promise<Contact | null> {
-    return (await this.readContacts()).find((c) => c.contact.phone === phone)?.contact ?? null;
+    return (await this.readContacts()).find((c) => samePhone(c.contact.phone, phone))?.contact ?? null;
   }
 
   async saveContact(contact: Contact): Promise<void> {
@@ -46,7 +49,7 @@ export class GoogleSheetCallLogStore implements CallLogStore {
       contact.totalCalls,
       contact.notes,
     ];
-    const existing = (await this.readContacts()).find((c) => c.contact.phone === contact.phone);
+    const existing = (await this.readContacts()).find((c) => samePhone(c.contact.phone, contact.phone));
     if (!existing) {
       await this.append(CONTACTS, values);
       return;
@@ -86,4 +89,9 @@ export class GoogleSheetCallLogStore implements CallLogStore {
       },
     }));
   }
+}
+
+function samePhone(a: string, b: string): boolean {
+  const digits = (phone: string) => phone.replace(/\D/g, '');
+  return digits(a) !== '' && digits(a) === digits(b);
 }

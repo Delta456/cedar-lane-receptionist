@@ -73,7 +73,7 @@ See [AGENTS.md](AGENTS.md) for the architecture, conventions and the reasoning b
 
 ## Testing
 
-**187 unit tests** (`npm test`) cover the booking rules, phone and date parsing, the tools, the conversation loop and its guards, the end-of-call logging, the HTTP server and the Vapi endpoint. They use in-memory stores and a scripted model, with no network.
+**189 unit tests** (`npm test`) cover the booking rules, phone and date parsing, the tools, the conversation loop and its guards, the end-of-call logging, the HTTP server and the Vapi endpoint. They use in-memory stores and a scripted model, with no network.
 
 **An eval** (`npm run eval`) plays **38 caller scenarios** through the real model, then checks what actually ended up on the calendar and in the call log, not the wording. Alongside the brief's examples, it covers adversarial and ambiguous callers:
 

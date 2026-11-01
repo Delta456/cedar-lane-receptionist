@@ -131,7 +131,7 @@ Quick checks: search both files for the names of anything you renamed or removed
 - **Never commit `.env`, `key.json` or other credentials.** They are gitignored. Never print secrets or paste them into logs, code or output.
 - **Logs must not contain personal data:** no caller messages, names or phone numbers. Log events, tool names, outcomes and timings. The Sheet is the record of who called.
 - `npm run smoke` is read-only. Anything that writes to the real Calendar or Sheet must clean up after itself. Prefer `npm run eval`, which uses in-memory stores.
-- Sheet writes use `valueInputOption: 'RAW'`, so caller text is never run as a formula. Keep it that way.
+- Sheet writes use `valueInputOption: 'RAW'`, so caller text is never run as a formula. Keep it that way. Contacts are matched on the phone number's digits only (`samePhone` in `integrations/google/call-log-store.ts`): if someone edits a phone cell by hand, Sheets turns "+41235646856" into a formula showing 41235646856, and an exact match added a second row for the same caller during the demo recording.
 
 ## Known quirks
 
