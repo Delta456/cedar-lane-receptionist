@@ -355,7 +355,10 @@ test('a reply that skips telling the caller their time is taken is sent back onc
   ]);
   const turn = await c.send('I would like to book a car wash on 5th November at 3:30pm.');
   assert.equal(turn.reply, 'Sorry, 3:30 PM is booked. Would 3 PM or 4:30 PM work?');
-  assert.match(String(requests[2]?.messages.at(-1)?.content), /isn't available.*First say 3:30 PM isn't available/);
+  assert.match(
+    String(requests[2]?.messages.at(-1)?.content),
+    /isn't available.*Sorry, 3:30 PM isn't available, it's already booked/,
+  );
 });
 
 test('a reply that says the time is taken is not questioned', async () => {
@@ -375,6 +378,47 @@ test('a reply that says the time is taken is not questioned', async () => {
   ]);
   await c.send('Can I get a car wash on 5th November at 3:30pm?');
   // The tool call, the reply and the claim check: no correction.
+  assert.equal(requests.length, 3);
+});
+
+test('offering a time no tool has checked is sent back, and the check is made', async () => {
+  calendar.add({
+    summary: 'Interior detail & wash',
+    description: '',
+    start: DateTime.fromISO('2026-11-05T15:30', { zone: shop.timezone }),
+    end: DateTime.fromISO('2026-11-05T16:30', { zone: shop.timezone }),
+    busy: true,
+    owner: null,
+  });
+  const check = {
+    name: 'check_availability',
+    args: { serviceId: 'interior-detail-wash', date: '2026-11-05', time: '15:30' },
+  };
+  const { conversation: c, requests } = conversation([
+    // From the demo: offered without checking, with the tool's ISO date.
+    { content: 'I can book an interior detail & wash for you on 2026-11-05 at 3:30 PM. What is your name?' },
+    { toolCalls: [check] },
+    { content: "Sorry, 3:30 PM isn't available, it's already booked. Would 4:30 PM or 2:30 PM work?" },
+    noClaim,
+  ]);
+  const turn = await c.send('I would like an interior detail and wash on 5th November at 3:30pm.');
+  assert.equal(turn.toolCalls[0]?.name, 'check_availability');
+  assert.equal(turn.reply, "Sorry, 3:30 PM isn't available, it's already booked. Would 4:30 PM or 2:30 PM work?");
+  assert.match(String(requests[1]?.messages.at(-1)?.content), /no tool has checked/);
+  // The history gets the date as the caller should hear it.
+  assert.match(JSON.stringify(requests[1]?.messages), /Thursday, Nov 5 at 3:30 PM/);
+});
+
+test('offering a time a tool returned earlier in the call is not questioned', async () => {
+  const check = { name: 'check_availability', args: { serviceId: 'exterior-wash', date: '2026-11-05', time: '10:00' } };
+  const { conversation: c, requests } = conversation([
+    { toolCalls: [check] },
+    { content: '10 AM is open. Want it?' },
+    { content: 'Great, I can book you in at 10 AM. What is your name and number?' },
+  ]);
+  await c.send('Is Thursday at 10 open for a wash?');
+  const turn = await c.send('Yes please.');
+  assert.equal(turn.reply, 'Great, I can book you in at 10 AM. What is your name and number?');
   assert.equal(requests.length, 3);
 });
 

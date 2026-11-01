@@ -389,6 +389,28 @@ export const scenarios: Scenario[] = [
     check: (r) => [...expectNoNewBookings(r, 0), ...expectOneCall(r, { needsHuman: true, phone: MIKE })],
   },
   {
+    // From the demo: given last year and a misspelt service, the agent
+    // offered the taken 3:30 without checking it (3 of 5 runs).
+    name: 'never offers a time it has not checked, given a past year and a misspelt service',
+    setup: thursdayAt330,
+    caller: [
+      'Hi, I would like to book an appointment at 5th November 2025 at 3:30pm for interior design and wash',
+      'Sorry, I meant this year, 2026.',
+      'Sure, 4:30 works.',
+      'Sara, 415-555-0190.',
+      "That's all, bye.",
+    ],
+    check(r) {
+      const offered = r.replies.find((reply) =>
+        /\b(can book|could book|is available|is free)\b[^.?!]*\b3:30/i.test(reply),
+      );
+      const problems = offered ? [`offered 3:30, which is taken: "${offered}"`] : [];
+      if (!owned(r, SARA)[0]?.start.equals(at('2026-11-05T16:30')))
+        problems.push('no booking for Sara on Thursday at 4:30');
+      return problems;
+    },
+  },
+  {
     // From the demo: the agent asked for a name and number as if 3:30 were free.
     name: "says the time asked for is taken, for a car wash in the caller's words",
     setup: thursdayAt330,

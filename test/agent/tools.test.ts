@@ -233,7 +233,20 @@ test('a taken time comes back with what to tell the caller, before the alternati
   const labels = (result.alternatives as { label: string }[]).map((a) => a.label);
   assert.equal(
     result.tellCaller,
-    `First say 10 AM isn't available (it's already booked). Then offer ${labels[0]} or ${labels[1]}.`,
+    `Sorry, 10 AM isn't available, it's already booked. I can offer ${labels[0]} or ${labels[1]}.`,
+  );
+});
+
+test('a past date asks which day the caller wants instead', async () => {
+  const result = await run('check_availability', {
+    serviceId: 'interior-detail-wash',
+    date: '2025-11-05',
+    time: '15:30',
+  });
+  assert.equal(result.reason, 'in_past');
+  assert.equal(
+    result.tellCaller,
+    "Sorry, 3:30 PM isn't available, that time has passed. Which day would you like instead?",
   );
 });
 

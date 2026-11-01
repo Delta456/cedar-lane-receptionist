@@ -9,12 +9,12 @@
 import { randomUUID } from 'node:crypto';
 import { DateTime } from 'luxon';
 import type OpenAI from 'openai';
-import { speakTimes } from '../domain/spoken-time.ts';
+import { clockMinutes, speakDates, speakTimes } from '../domain/spoken-time.ts';
 import { createLogger, type Logger } from '../lib/logger.ts';
 import { SerialQueue } from '../lib/serial-queue.ts';
 import type { CallLog } from '../services/call-log-service.ts';
 import { type CallSummary, summarizeCall } from './call-summary.ts';
-import { checkBookingClaim, claimsLateNote, saysUnavailable } from './claim-check.ts';
+import { checkBookingClaim, claimsLateNote, offersTime, saysUnavailable } from './claim-check.ts';
 import { buildSystemPrompt, type Channel } from './prompt.ts';
 import { createTextToolCallDetector } from './text-tool-calls.ts';
 import { type CallState, findTool, newCallState, type Services, type Tool, tools } from './tools.ts';
@@ -72,6 +72,9 @@ const UNBACKED_LATE_NOTE =
 // Sent when a check this turn found the caller's time unavailable and the
 // reply doesn't say so. The tool result's tellCaller is added after it.
 const UNTOLD_UNAVAILABLE = "[Check: your reply didn't tell the caller that the time they asked for isn't available.";
+// Sent when a reply offers a time that no tool has checked in this call.
+const UNCHECKED_TIME =
+  '[Check: you offered the caller a time that no tool has checked. Never say a time can be booked until check_availability says so. Call check_availability now with the service, date and time, then tell the caller what it says.]';
 const UNBACKED_CLAIM =
   "[Check: you just told the caller a booking was made, moved or cancelled, but no booking tool succeeded in this turn. If the caller confirmed the change, call the tool now. If not, don't claim it; ask them to confirm.";
 
@@ -89,6 +92,9 @@ export class Conversation {
   // messages, and the API rejects a tool call that isn't followed by its result.
   private readonly turns = new SerialQueue();
   private lastActiveAt = Date.now();
+  // Every time of day a tool was asked about or returned in this call, in
+  // minutes after midnight. A reply may only offer one of these.
+  private readonly timesSeen = new Set<number>();
   private recoveredCalls = 0;
   // Confirmations of booking changes made earlier in the call, so a reply
   // that only repeats one can be told apart from a new, false claim.
@@ -248,6 +254,7 @@ export class Conversation {
     let corrected = false;
     let lateCorrected = false;
     let unavailableCorrected = false;
+    let uncheckedCorrected = false;
 
     for (let step = 0; step < MAX_STEPS; step++) {
       const message = await this.complete();
@@ -264,10 +271,10 @@ export class Conversation {
       this.messages.push(
         calls.length > 0
           ? { role: 'assistant', content: message.content ?? null, tool_calls: calls }
-          : { role: 'assistant', content: speakTimes(message.content ?? '') },
+          : { role: 'assistant', content: this.spoken(message.content ?? '') },
       );
       if (calls.length === 0) {
-        const text = speakTimes(message.content?.trim() || (this.call.endRequested ? GOODBYE : NO_REPLY));
+        const text = this.spoken(message.content?.trim() || (this.call.endRequested ? GOODBYE : NO_REPLY));
         // A reply that claims a booking change no tool made would send the
         // caller away believing something false. Ask the model once to act
         // on it or take it back. The cheap check runs first, so the claim
@@ -295,7 +302,19 @@ export class Conversation {
         if (!unavailableCorrected && untold && !saysUnavailable(text)) {
           unavailableCorrected = true;
           this.log.warn('untold_unavailable');
-          this.messages.push({ role: 'user', content: `${UNTOLD_UNAVAILABLE} ${untold} Then reply to the caller.]` });
+          this.messages.push({
+            role: 'user',
+            content: `${UNTOLD_UNAVAILABLE} Tell them, in your own words: "${untold}"]`,
+          });
+          continue;
+        }
+        // "Only offer times a tool returned" is in the prompt, but given a
+        // past year or a misspelt service, the model offered the caller's
+        // own time, already taken, without checking it (3 of 5 runs).
+        if (!uncheckedCorrected && offersTime(text) && clockMinutes(text).some((m) => !this.timesSeen.has(m))) {
+          uncheckedCorrected = true;
+          this.log.warn('unchecked_time_offered');
+          this.messages.push({ role: 'user', content: UNCHECKED_TIME });
           continue;
         }
         return this.reply(text, toolCalls);
@@ -310,6 +329,9 @@ export class Conversation {
         const input = parseArguments(call.function.arguments);
         const result = input === undefined ? invalidJson() : await this.runTool(name, input);
         toolCalls.push({ name, input, result });
+        for (const minutes of clockMinutes(JSON.stringify({ input, result }))) {
+          this.timesSeen.add(minutes);
+        }
         this.changesMade.push(...confirmations([{ name, input, result }]));
         if (name === 'mark_running_late' && (result as { ok?: unknown } | null)?.ok === true) {
           this.lateNoted = true;
@@ -346,6 +368,12 @@ export class Conversation {
       this.log.warn('unbacked_booking_claim', { via: check.via });
     }
     return check.claimsChange;
+  }
+
+  // A reply as the caller should get it: spoken times and dates, not the
+  // 24-hour times and ISO dates the tools use.
+  private spoken(text: string): string {
+    return speakDates(speakTimes(text), (this.deps.now?.() ?? DateTime.now()).year);
   }
 
   private reply(text: string, toolCalls: ToolCall[]): Turn {

@@ -95,3 +95,14 @@ const SAYS_UNAVAILABLE =
 export function saysUnavailable(reply: string): boolean {
   return SAYS_UNAVAILABLE.test(reply);
 }
+
+// A reply offering to book a particular time: "I can book that for 3:30 PM",
+// "4:30 PM is available". Opening hours ("we're open 8 AM to 6 PM") aren't an
+// offer. The conversation pairs this with the times tools have returned, so
+// only an offer of a time no tool has seen is questioned.
+const OFFER =
+  /\b(i|we) (can|could|'ll|will) (book|schedule|fit|get|put)\b|\b(is|are|'s) (available|free)\b|\b(an? )?(opening|slot|spot) (at|for)\b/i;
+
+export function offersTime(reply: string): boolean {
+  return OFFER.test(reply);
+}

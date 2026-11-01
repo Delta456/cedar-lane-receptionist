@@ -141,7 +141,11 @@ function unavailableMessage(time: string, why: string, alternatives: { label: st
     .slice(0, 2)
     .map((a) => a.label)
     .join(' or ');
-  return `First say ${time} isn't available (${why}).${offer ? ` Then offer ${offer}.` : ''}`;
+  // Written as words for the caller, not instructions: the model sometimes
+  // read the note out word for word ("First say 3:15 PM isn't available...").
+  // A past date has no alternatives; without a next step, the model asked
+  // whether the caller meant an appointment they already had.
+  return `Sorry, ${time} isn't available, ${why}. ${offer ? `I can offer ${offer}.` : 'Which day would you like instead?'}`;
 }
 
 // Remembers what a successful booking action tells us about the call.
