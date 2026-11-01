@@ -47,6 +47,7 @@ src/
 test/                  unit tests, mirroring src/ (test/domain/dates.test.ts tests src/domain/dates.ts)
   support/             in-memory fake stores, a test HTTP server with stub conversations, test setup
 evals/                 caller scenarios and the eval runner (real model, fake stores)
+docs/demo/             demo videos (MP4, kept small: they stay in git history)
 ```
 
 `src/` holds only code that runs in production. Nothing in `src/` imports from `test/` or `evals/`.

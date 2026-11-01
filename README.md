@@ -5,7 +5,7 @@ An AI receptionist for **Cedar Lane Auto Detailing**, a small shop that gets aro
 - **Phase 1**: a text chat agent with a minimal chat page.
 - **Phase 2**: the same agent on a phone call through Vapi. Built, with five test calls from the Vapi dashboard so far; see [Voice calls (Phase 2)](#voice-calls-phase-2).
 
-**Demo videos:** _Phase 1 chat: (add link)_ · _Phase 2 call: (add link)_
+**Demo videos:** [Phase 1 chat](docs/demo/phase1-chat.mp4) (MP4, 10 min) · _Phase 2 call: (add link)_
 
 ```
 Caller: Is the 3:30 interior detail and wash appointment on Thursday open?
@@ -69,6 +69,7 @@ src/
   server/        the HTTP server, and the calls in progress across both channels
 test/            unit tests, mirroring src/
 evals/           caller scenarios run through the real model
+docs/demo/       demo videos
 ```
 
 See [AGENTS.md](AGENTS.md) for the architecture, conventions and the reasoning behind each guard in more detail.
