@@ -310,6 +310,16 @@ describe('name checks', () => {
     assert.ok((await bookings.cancel({ eventId: event.id, phone: SARA, callerName: 'Anyone' })).ok);
   });
 
+  test('a booking under "Sara" is found for "Sarah", but not for a different name', async () => {
+    await bookSara();
+    const found = await bookings.find(SARA, 'Sarah');
+    assert.ok(found.ok);
+    assert.equal(found.bookings.length, 1);
+    const other = await bookings.find(SARA, 'Mike');
+    assert.ok(other.ok);
+    assert.equal(other.bookings.length, 0);
+  });
+
   test('first names match regardless of case and surname', async () => {
     const booking = await bookSara();
     const result = await bookings.cancel({ eventId: booking.eventId, phone: SARA, callerName: 'SARA LEE' });

@@ -40,6 +40,10 @@ export type Scenario = {
   check: (result: ScenarioResult) => string[];
 };
 
+// The last four digits of Sara's number, as digits or as spoken on a call
+// ("zero one nine zero"), which is how the voice prompt says to give numbers.
+const ENDS_0190 = /0190|(zero|oh) one nine (zero|oh)/i;
+
 // A booking made earlier by Sara.
 function saraBooking(calendar: FakeCalendarStore, start: string, serviceId = 'interior-detail-wash'): CalendarEvent {
   const service = shop.services.find((s) => s.id === serviceId);
@@ -332,10 +336,10 @@ export const scenarios: Scenario[] = [
     check(r) {
       const problems: string[] = [];
       const asked = r.replies.find(
-        (reply) => /(what('s| is)|can i (get|have)|may i have)[^.?]*\bnumber/i.test(reply) && !/0190/.test(reply),
+        (reply) => /(what('s| is)|can i (get|have)|may i have)[^.?]*\bnumber/i.test(reply) && !ENDS_0190.test(reply),
       );
       if (asked) problems.push(`asked for the phone number: "${asked}"`);
-      if (!r.replies.some((reply) => /0190/.test(reply))) problems.push('never confirmed the number ending in 0190');
+      if (!r.replies.some((reply) => ENDS_0190.test(reply))) problems.push('never confirmed the number ending in 0190');
       const event = owned(r, SARA)[0];
       if (!event?.start.equals(at('2026-11-05T10:00'))) problems.push('no booking for Sara on Thursday at 10');
       return [...problems, ...expectOneCall(r, { phone: SARA })];
@@ -349,7 +353,7 @@ export const scenarios: Scenario[] = [
     check(r) {
       const problems: string[] = [];
       const asked = r.replies.find(
-        (reply) => /(what('s| is)|can i (get|have)|may i have)[^.?]*\bnumber/i.test(reply) && !/0190/.test(reply),
+        (reply) => /(what('s| is)|can i (get|have)|may i have)[^.?]*\bnumber/i.test(reply) && !ENDS_0190.test(reply),
       );
       if (asked) problems.push(`asked for the phone number: "${asked}"`);
       const event = owned(r, SARA)[0];

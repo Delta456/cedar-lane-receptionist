@@ -28,6 +28,7 @@ import {
   type UnavailableReason,
 } from '../domain/availability.ts';
 import { resolveDate } from '../domain/dates.ts';
+import { firstNamesMatch } from '../domain/names.ts';
 import { formatPhone, normalizePhone } from '../domain/phone.ts';
 import { SerialQueue } from '../lib/serial-queue.ts';
 import type { BookingOwner, CalendarEvent, CalendarStore } from './ports.ts';
@@ -357,7 +358,8 @@ function wroteFirst(a: CalendarEvent, b: CalendarEvent): boolean {
 }
 
 // Whether a caller's name matches the name on a booking. First names are
-// enough ("Sara" matches "Sara Lee"), and case and punctuation don't matter.
+// enough ("Sara" matches "Sara Lee"), case and punctuation don't matter, and
+// a one-letter spelling difference is forgiven (see domain/names.ts).
 // A booking with no name on it (made by hand without one) can't be checked
 // this way, so only its phone number is required.
 function nameMatches(owner: BookingOwner | null, callerName: string): boolean {
@@ -367,5 +369,5 @@ function nameMatches(owner: BookingOwner | null, callerName: string): boolean {
     return true;
   }
   const given = words(callerName);
-  return given.length > 0 && given[0] === onBooking[0];
+  return given[0] !== undefined && onBooking[0] !== undefined && firstNamesMatch(given[0], onBooking[0]);
 }

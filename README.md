@@ -57,7 +57,7 @@ The model is **NVIDIA Nemotron 3.5 Bolt E4B**, a small, fast model (4B effective
 ```
 src/
   config/        shop facts (services, prices, hours, policies, FAQ) and environment settings
-  domain/        pure logic: availability, dates, phone numbers, spoken times, hand-made booking text
+  domain/        pure logic: availability, dates, phone numbers, names, spoken times, hand-made booking text
   services/      booking and call-log rules, behind storage interfaces
   integrations/  Google Calendar and Sheets stores, the LLM client
   agent/         conversation loop, tools, prompt, end-of-call summary, claim check
@@ -73,7 +73,7 @@ See [AGENTS.md](AGENTS.md) for the architecture, conventions and the reasoning b
 
 ## Testing
 
-**184 unit tests** (`npm test`) cover the booking rules, phone and date parsing, the tools, the conversation loop and its guards, the end-of-call logging, the HTTP server and the Vapi endpoint. They use in-memory stores and a scripted model, with no network.
+**187 unit tests** (`npm test`) cover the booking rules, phone and date parsing, the tools, the conversation loop and its guards, the end-of-call logging, the HTTP server and the Vapi endpoint. They use in-memory stores and a scripted model, with no network.
 
 **An eval** (`npm run eval`) plays **38 caller scenarios** through the real model, then checks what actually ended up on the calendar and in the call log, not the wording. Alongside the brief's examples, it covers adversarial and ambiguous callers:
 
@@ -92,11 +92,11 @@ See [AGENTS.md](AGENTS.md) for the architecture, conventions and the reasoning b
 |               | Result                                                                |
 | ------------- | --------------------------------------------------------------------- |
 | Latest run    | **76/76 conversations passed** (38 scenarios × 2 runs)                |
-| Reply latency | median 0.76 s, p90 2.15 s (turns that run tools need 2–3 model calls) |
+| Reply latency | median 1.39 s, p90 3.91 s (turns that run tools need 2–3 model calls) |
 
-Runs vary: in the run before this one, two caller-ID scenarios missed once each, which is how the early hang-up below was found. The non-US number scenario books every time, but the agent mentions the country code in only about 3 of 5 runs (see Known limitations).
+Runs vary: in the run before this one, a caller-ID check missed twice because the agent said "ending in zero one nine zero" in words, as the voice prompt asks; the check now accepts spoken digits. The non-US number scenario books every time, but the agent mentions the country code in only about 3 of 5 runs (see Known limitations).
 
-Latency varies between runs with NVIDIA's hosted endpoint: full runs have given medians from 0.55 s to 1.30 s.
+Latency varies between runs with NVIDIA's hosted endpoint: full runs have given medians from 0.55 s to 1.39 s; this run was one of the slow ones.
 
 The model isn't deterministic, so treat this as strong evidence, not a guarantee. Earlier runs are how the guards above were found: the first run passed 24/28.
 
@@ -159,6 +159,7 @@ Five test calls from the Vapi dashboard found problems the chat testing and the 
 | Call 2: the caller gave their number in pieces             | The agent promised a callback on the first five digits ("seven nine seven seven five"). Nothing checked a callback number: only bookings went through a tool that validates phone numbers. A typed half-number in the chat would have done the same.                                                          | Handoffs go through a `request_callback` tool, which refuses an incomplete number and tells the agent to ask for the whole number again. A requested callback is logged as a fact: Needs Human = Yes, with the checked number. | Unit tests; the "number said in pieces" eval scenario                                                                                                       |
 | The eval scenario written for that fix                     | Given "six five oh, five five five, oh one four two" after the fragment, the model merged the two into an 11-digit number, so the callback kept failing. The model converts spoken digits itself, and gets it wrong.                                                                                          | Every tool reads the caller's number from the caller's own words when they contain a complete one, with the code's parser; the model's copy is only a fallback. Bookings and lookups get this too.                             | That scenario went from 0/4 to 5/5                                                                                                                          |
 | Call 5: the caller's Indian mobile number                  | Refused on every try, though speech-to-text heard it correctly ("nine eight double one four one double six eight five"): only North American numbers were accepted. The agent just repeated "that number seems invalid", so the caller couldn't fix it. A chat caller outside the US had the same problem. | Numbers with a country code are checked for their country (`libphonenumber-js`); a refused number comes with a note telling the agent to ask for the country code. A spoken "Oh," before a number is no longer read as a zero. | Unit tests; "a non-US number is booked once the caller adds the country code": books 5/5, but the agent mentions the country code in only about 3 of 5 runs |
+| Call 4: speech-to-text wrote "Sarah"                       | The booking was under "Sara", and the ownership check compared first names exactly, so a caller without caller ID couldn't find their own booking. A chat caller's typo had the same effect.                                                                                                                  | A one-letter spelling difference in the first name is forgiven (`domain/names.ts`); the phone number must still match, and different names (Mike for Sara) still fail.                                                         | Unit tests                                                                                                                                                  |
 | Call 3: speech-to-text heard "Thursday" as "seven o'clock" | The agent guessed a day ("Friday", or "Saturday, November 7") instead of asking. The eval, given the same misheard words, guessed in 2 of 4 runs. A chat caller's typo could do the same.                                                                                                                     | A prompt rule: if the words don't clearly name a day, ask which day; never guess.                                                                                                                                              | "Asks which day when it can't tell" scenario: 2/4 before, 6/6 after                                                                                         |
 | Call 3: the caller corrected the day                       | Answered "I said Tuesday" with the question meant for vague messages ("Do you mean an appointment you already have, or what times are open?"), copied word for word. The eval reproduced it in 1 of 4 runs.                                                                                                   | That rule now says not to ask when the caller is answering or correcting.                                                                                                                                                      | "Takes a correction of the day" scenario 6/6; the vague-message scenario still 6/6                                                                          |
 
@@ -176,10 +177,9 @@ Five test calls from the Vapi dashboard found problems the chat testing and the 
 **Found, not fixed yet.**
 
 - **Long digit strings:** on call 4, speech-to-text dropped a "five" from the caller's phone number on the first try and added a stray "four" and "five" on the second. The code's parser rightly refused both. The switch to Nova-3 with Indian English is meant to help; callers on a real phone line won't need to say their number at all, because of caller ID.
-- **Names spelled differently:** speech-to-text wrote "Sarah" for a booking under "Sara". The ownership check compares first names exactly, so on a call without caller ID the caller couldn't have found their own booking. (On call 4 there was no booking to find: it had been cancelled in an earlier test.)
 
 - **Latency:** replies started about 1.7 s after the caller stopped with Flux (call 2) and about 4 s with Nova-3 (call 5), against the 1.2 s target. See Known limitations.
-- **Mishearing:** speech-to-text heard "pricing in Victor" for "pricing in detail", and the agent answered it literally ("I don't have pricing for Victor") instead of asking the caller to repeat. The call prompt now tells it to ask; no eval scenario covers this yet.
+- **Mishearing:** speech-to-text heard "pricing in Victor" for "pricing in detail", and the agent answered it literally ("I don't have pricing for Victor") instead of asking the caller to repeat. An eval scenario with those exact words failed all 12 runs, across two prompt wordings: the model can't judge that a word sounds out of place, and falls back on "I don't know, I can have someone call you back". That's at least an honest answer, and the caller can repeat themselves.
 
 ### Setup
 
@@ -193,7 +193,6 @@ Five test calls from the Vapi dashboard found problems the chat testing and the 
 
 - **Phase 2 has had five test calls so far,** all from the Vapi dashboard (no caller ID). They found the problems listed in "What the test calls found". Caller ID on a real phone call is still untested.
 - **Voice replies are slower than the brief's 1.2 s, and accuracy and speed pull against each other.** With Deepgram Flux, replies started about 1.7 s after the caller stopped (call 2), but Flux misheard the test caller's Indian English accent. With Nova-3 and Indian English (current), it heard better, but Vapi's turn detector made turns about 4 s (call 5). In both, this server's share is 0.9–1.4 s through the tunnel, because it waits for the model's whole reply; streaming the reply as it's generated would start long answers sooner. Both speech setups are in `src/channels/voice/assistant.ts`.
-- **Names must match the booking's spelling.** Without caller ID, the first name has to match the booking exactly, and speech-to-text wrote "Sarah" for "Sara" on a call.
 - **Numbers without a country code are read as US numbers.** A caller outside the US has to say their country code; the agent is told to ask for it, but in the eval it mentioned the country code in only about 3 of 5 runs.
 - **A tunnel exposes the chat page too.** Only the Vapi routes are behind `VAPI_SECRET`; the chat page and `/api/chat` have no login, so anyone with the tunnel URL could use them. Run the tunnel only while testing calls.
 - **On a call, an interrupted reply still counts as said.** If the caller cuts the agent off, the agent's history keeps the whole reply.
