@@ -34,10 +34,7 @@ test('formatPhone', () => {
 });
 
 test('a number with a country code is checked for its own country, as for a test caller in India', () => {
-  assert.equal(
-    normalizePhone('plus nine one nine eight double one four one double six eight five'),
-    '+919811416685',
-  );
+  assert.equal(normalizePhone('plus nine one nine eight double one four one double six eight five'), '+919811416685');
   assert.equal(normalizePhone('+91 98114 16685'), '+919811416685');
   assert.equal(normalizePhone('+44 20 7946 0958'), '+442079460958');
   assert.equal(normalizePhone('plus one four one five five five five zero one nine zero'), '+14155550190');
