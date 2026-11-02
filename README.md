@@ -73,6 +73,7 @@ src/
 test/            unit tests, mirroring src/
 evals/           caller scenarios run through the real model
 docs/demo/       demo videos
+LICENSE          MIT
 ```
 
 See [AGENTS.md](AGENTS.md) for the architecture, conventions and the reasoning behind each guard in more detail.
@@ -211,3 +212,7 @@ Eleven test calls (web calls through Vapi) found problems the chat testing and t
 - **The booking-claim check relies on the model** for wordings that only sound finished. In the latest test (9 such wordings, each checked 3 times), all 26 model answers were right; the 27th request failed, and the check treated the reply as a claim, as designed. A model check can still be wrong, and when the check itself fails it errs on the side of correcting the reply, which costs the agent a rephrase.
 - **The shop information has no address** (the brief gives none), so the agent says it doesn't know and offers a callback, though in the bug hunt it once gave a muddled answer instead.
 - **NVIDIA's hosted endpoint returns spurious 404s under load.** The client retries them, but some requests still fail after every retry (several times while recording the demo); the agent then apologises and offers a callback instead of answering, and the end-of-call summary falls back to a basic log flagged for a human.
+
+## License
+
+[MIT](LICENSE)
